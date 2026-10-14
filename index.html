@@ -1,4 +1,4 @@
-d<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8">
@@ -86,8 +86,8 @@ d<!DOCTYPE html>
       justify-content: center;
       text-align: center;
       padding: 6px;
-      font-size: 0.8rem;
-      line-height: 1.25;
+      font-size: 0.78rem;
+      line-height: 1.2;
       word-break: break-word;
       hyphens: auto;
       border: 2px solid transparent;
@@ -118,23 +118,23 @@ d<!DOCTYPE html>
       border-color: var(--accent);
     }
 
-    .card.revealed.type-term { font-size: 0.85rem; }
-    .card.revealed.type-def { font-size: 0.72rem; }
+    .card.revealed.type-term { font-size: 0.8rem; }
+    .card.revealed.type-def { font-size: 0.65rem; }
 
-    /* Status 3: Falsches Paar (rot hervorgehoben) */
+    /* Status 3: Falsches Paar */
     .card.mismatch {
       border-color: var(--mismatch-border) !important;
       box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
     }
 
-    /* Status 4: Gefundenes Paar (bleibt klickbar für Vergrößerung) */
+    /* Status 4: Gefundenes Paar */
     .card.matched {
       border-color: var(--matched-border) !important;
       box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
       cursor: pointer;
     }
 
-    /* Modals (Gewinn & Kartenvergrößerung) */
+    /* Modals */
     .modal {
       position: fixed;
       inset: 0;
@@ -167,239 +167,4 @@ d<!DOCTYPE html>
     .preview-card {
       border-radius: 16px;
       border: 3px solid var(--matched-border);
-      padding: 24px 20px;
-      max-width: 340px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
-    }
-
-    .preview-badge {
-      display: inline-block;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.15);
-      margin-bottom: 14px;
-      color: #cbd5e1;
-    }
-
-    .preview-text {
-      font-size: 1.25rem;
-      line-height: 1.45;
-      color: #fff;
-      word-break: break-word;
-    }
-
-    .preview-hint {
-      margin-top: 16px;
-      font-size: 0.8rem;
-      color: #94a3b8;
-    }
-  </style>
-</head>
-<body>
-
-  <header>
-    <div class="stats">Züge: <span id="moves">0</span></div>
-    <button class="btn" id="restartBtn">Neu</button>
-  </header>
-
-  <main class="grid" id="grid"></main>
-
-  <!-- Gewinn-Dialog -->
-  <div class="modal" id="winModal">
-    <div class="modal-box">
-      <h2>Geschafft! 🎉</h2>
-      <p id="winMessage"></p>
-      <button class="btn" id="modalRestartBtn">Nochmal spielen</button>
-    </div>
-  </div>
-
-  <!-- Vergrößerungs-Overlay für gelöste Karten -->
-  <div class="modal" id="cardModal">
-    <div class="preview-card" id="previewCard">
-      <div class="preview-badge" id="previewBadge">Begriff</div>
-      <div class="preview-text" id="previewText"></div>
-      <div class="preview-hint">Tippen zum Schließen</div>
-    </div>
-  </div>
-
-  <script>
-    const PAIRS = [
-      { id: 1, term: "Körperliche Untersuchung", def: "Untersuchung des Patienten durch Sinne des Arztes (Sehen, Hören, Tasten, Riechen), ggf. unter Verwendung einfacher Hilfsmittel (z.B. Stethoskop)" },
-      { id: 2, term: "Anamnese", def: "Systematische Befragung des Patienten zur Erfassung von 
-: aktuelle Beschwerden, gesundheitliche Vorgeschichte, besondere Dispositionen (z.B. Allergien), Lebensumstände, genetisches Risiko" },
-      { id: 3, term: "Bildgebende Verfahren", def: "apparative, meist nichtinvasive diagnostische Verfahren zur visuellen Darstellung von Körperstrukturen und/oder -funktionen. Beispiele: Röntgen, CT, MRT},
-      { id: 4, term: "Röntgen (koventionell)", def: "Durch Röntgenstrahlen (elektromagnetische Strahlen) erzeugte Abbildung von einer Seite des Körperteils.  Unterschiedliche Absorption der Strahlen-> Graustufenbilder" },
-      { id: 5, term: "Computertomographie (CT)", def: "Darstellung in Querschnittbildern. Durch drehende Röntgenröhe aus allen Seite. schichtweise abgetastet. Im Gegensatz zur konventionellen Röntgen: Darstellung von Weichteilgewebe mit geringen Kontrastunterschieden" },
-      { id: 6, term: "Differenzialdiagnosen", def: "Alternative Diagnosemöglichkeiten mit ähnlicher bzw. identischer Symptomatik die ausgeschlossen werden müssen" },
-      { id: 7, term: "Kernsphintomographie (MRT)", def: "Schnittbildverfahren mit sehr starken, konstanten Magnetfeldern und Radiowellen. Sehr genaue und differenzierte Darstellungen von wasserhaltigem Gewebe, z.B. Meniskus. Gehirn" },
-      { id: 8, term: "Diagnostik Femurschaftfraktur", def: " Überprüfung von Durchblutung, Motorik und Sensibilität. Röntgenaufnahmen in zwei Ebenen. Empfehlend Röntgenaufnahmen im Bereich des Kniegelenks und Hüftgelenks" }
-    ];
-
-    const gridEl = document.getElementById('grid');
-    const movesEl = document.getElementById('moves');
-    const winModalEl = document.getElementById('winModal');
-    const winMsgEl = document.getElementById('winMessage');
-    const restartBtn = document.getElementById('restartBtn');
-    const modalRestartBtn = document.getElementById('modalRestartBtn');
-
-    // Elemente für die vergrößerte Ansicht
-    const cardModalEl = document.getElementById('cardModal');
-    const previewCardEl = document.getElementById('previewCard');
-    const previewBadgeEl = document.getElementById('previewBadge');
-    const previewTextEl = document.getElementById('previewText');
-
-    let flippedCards = [];
-    let moves = 0;
-    let matchedCount = 0;
-    let hasMismatch = false;
-
-    function shuffle(array) {
-      for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-      return array;
-    }
-
-    function initGame() {
-      winModalEl.classList.remove('show');
-      cardModalEl.classList.remove('show');
-      gridEl.innerHTML = '';
-      flippedCards = [];
-      moves = 0;
-      matchedCount = 0;
-      hasMismatch = false;
-      movesEl.textContent = moves;
-
-      const deck = [];
-      PAIRS.forEach(pair => {
-        deck.push({ id: pair.id, text: pair.term, type: 'term' });
-        deck.push({ id: pair.id, text: pair.def, type: 'def' });
-      });
-
-      const shuffled = shuffle(deck);
-
-      shuffled.forEach(item => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'card hidden';
-        btn.textContent = '?';
-        btn.dataset.id = item.id;
-        btn.dataset.text = item.text;
-        btn.dataset.type = item.type;
-
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          onCardClick(btn);
-        });
-        gridEl.appendChild(btn);
-      });
-    }
-
-    // Bei Klick ins Leere: Falsche Karten zudecken
-    document.addEventListener('click', () => {
-      if (hasMismatch) {
-        clearMismatch();
-      }
-    });
-
-    // Klick auf das Vergrößerungs-Popup schließt es wieder
-    cardModalEl.addEventListener('click', () => {
-      cardModalEl.classList.remove('show');
-    });
-
-    function showCardDetail(card) {
-      const isTerm = card.dataset.type === 'term';
-      previewBadgeEl.textContent = isTerm ? 'Begriff' : 'Erklärung / Definition';
-      previewTextEl.textContent = card.dataset.text;
-
-      // Farbschema anpassen (Blau oder Grün)
-      previewCardEl.className = 'preview-card type-' + card.dataset.type;
-      cardModalEl.classList.add('show');
-    }
-
-    function clearMismatch() {
-      flippedCards.forEach(card => hideCard(card));
-      flippedCards = [];
-      hasMismatch = false;
-    }
-
-    function onCardClick(card) {
-      // 1. Wenn bereits ein richtiges Paar gelöst ist: Karte groß anzeigen
-      if (card.classList.contains('matched')) {
-        // Falls noch ein falsches Paar offen liegt, zuerst dieses zudecken
-        if (hasMismatch) clearMismatch();
-        showCardDetail(card);
-        return;
-      }
-
-      // 2. Offenes falsches Paar wegräumen
-      if (hasMismatch) {
-        const wasInMismatch = flippedCards.includes(card);
-        clearMismatch();
-        if (wasInMismatch) return;
-      }
-
-      // 3. Wenn die Karte bereits im aktuellen Zug aufgedeckt ist, nichts tun
-      if (card.classList.contains('revealed')) {
-        return;
-      }
-
-      // 4. Karte aufdecken
-      revealCard(card);
-      flippedCards.push(card);
-
-      if (flippedCards.length === 2) {
-        moves++;
-        movesEl.textContent = moves;
-        checkPair();
-      }
-    }
-
-    function revealCard(card) {
-      card.classList.remove('hidden');
-      card.classList.add('revealed', 'type-' + card.dataset.type);
-      card.textContent = card.dataset.text;
-    }
-
-    function hideCard(card) {
-      card.classList.remove('revealed', 'mismatch', 'type-' + card.dataset.type);
-      card.classList.add('hidden');
-      card.textContent = '?';
-    }
-
-    function checkPair() {
-      const [c1, c2] = flippedCards;
-      const isMatch = c1.dataset.id === c2.dataset.id;
-
-      if (isMatch) {
-        c1.classList.add('matched');
-        c2.classList.add('matched');
-        matchedCount++;
-        flippedCards = [];
-
-        if (matchedCount === PAIRS.length) {
-          setTimeout(() => {
-            winMsgEl.textContent = `Alle 8 Begriffspaare in ${moves} Zügen gelöst!`;
-            winModalEl.classList.add('show');
-          }, 400);
-        }
-      } else {
-        c1.classList.add('mismatch');
-        c2.classList.add('mismatch');
-        hasMismatch = true;
-      }
-    }
-
-    restartBtn.addEventListener('click', initGame);
-    modalRestartBtn.addEventListener('click', initGame);
-
-    initGame();
-  </script>
-</body>
-</html>
+      padding: 
