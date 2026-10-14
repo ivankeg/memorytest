@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Lern-Memory</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-back-bg: #1e293b;
+      --card-term-bg: #1e3a8a;
+      --card-def-bg: #064e3b;
+      --accent: #38bdf8;
+      --matched-border: #22c55e;
+      --text: #f8fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 12px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .stats {
+      font-size: 1.1rem;
+      font-weight: bold;
+    }
+
+    .btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    .btn:active {
+      opacity: 0.8;
+    }
+
+    /* 4x4 Gitter */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-gap: 8px;
+      width: 100%;
+      max-width: 420px;
+      aspect-ratio: 1 / 1;
+    }
+
+    /* Karten-Grundgerüst */
+    .card {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6px;
+      font-size: 0.8rem;
+      line-height: 1.25;
+      word-break: break-word;
+      hyphens: auto;
+      border: 2px solid transparent;
+      transition: background-color 0.2s, border-color 0.2s;
+    }
+
+    /* Status 1: Verdeckt */
+    .card.hidden {
+      background-color: var(--card-back-bg);
+      border-color: #334155;
+      color: var(--accent);
+      font-size: 1.4rem;
+      font-weight: bold;
+    }
+
+    /* Status 2: Aufgedeckt (Begriff) */
+    .card.revealed.type-term {
+      background-color: var(--card-term-bg);
+      border-color: var(--accent);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+
+    /* Status 2: Aufgedeckt (Definition) */
+    .card.revealed.type-def {
+      background-color: var(--card-def-bg);
+      border-color: var(--accent);
+      font-size: 0.72rem;
+    }
+
+    /* Status 3: Gefundenes Paar (Bleibt sichtbar offen) */
+    .card.matched {
+      border-color: var(--matched-border) !important;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* Popup bei Gewinn */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 100;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-box {
+      background: var(--card-back-bg);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid #475569;
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+    }
+
+    .modal h2 { margin-bottom: 12px; color: var(--accent); }
+    .modal p { margin-bottom: 20px; color: #cbd5e1; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="stats">Züge: <span id="moves">0</span></div>
+    <button class="btn" id="restartBtn">Neu</button>
+  </header>
+
+  <main class="grid" id="grid"></main>
+
+  <div class="modal" id="winModal">
+    <div class="modal-box">
+      <h2>Geschafft! 🎉</h2>
+      <p id="winMessage"></p>
+      <button class="btn" id="modalRestartBtn">Nochmal spielen</button>
+    </div>
+  </div>
+
+  <script>
+    const PAIRS = [
+      { id: 1, term: "Photosynthese", def: "Umwandlung von Licht & CO₂ in Glukose" },
+      { id: 2, term: "DNA", def: "Erbgutstrang mit genetischem Bauplan" },
+      { id: 3, term: "Mitochondrien", def: "Kraftwerke der Zelle" },
+      { id: 4, term: "Osmose", def: "Lösungsmitteltransport durch Membran" },
+      { id: 5, term: "Enzym", def: "Biokatalysator für Reaktionen" },
+      { id: 6, term: "Ribosom", def: "Ort der Eiweißherstellung" },
+      { id: 7, term: "Zellkern", def: "Steuerzentrum mit Erbgut" },
+      { id: 8, term: "Vakuole", def: "Zellsaftraum zur Stabilität" }
+    ];
+
+    const gridEl = document.getElementById('grid');
+    const movesEl = document.getElementById('moves');
+    const modalEl = document.getElementById('winModal');
+    const winMsgEl = document.getElementById('winMessage');
+    const restartBtn = document.getElementById('restartBtn');
+    const modalRestartBtn = document.getElementById('modalRestartBtn');
+
+    let flippedCards = [];
+    let moves = 0;
+    let matchedCount = 0;
+    let isLocked = false;
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function initGame() {
+      modalEl.classList.remove('show');
+      gridEl.innerHTML = '';
+      flippedCards = [];
+      moves = 0;
+      matchedCount = 0;
+      isLocked = false;
+      movesEl.textContent = moves;
+
+      // Deck vorbereiten
+      const deck = [];
+      PAIRS.forEach(pair => {
+        deck.push({ id: pair.id, text: pair.term, type: 'term' });
+        deck.push({ id: pair.id, text: pair.def, type: 'def' });
+      });
+
+      const shuffled = shuffle(deck);
+
+      shuffled.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'card hidden';
+        btn.textContent = '?';
+        btn.dataset.id = item.id;
+        btn.dataset.text = item.text;
+        btn.dataset.type = item.type;
+
+        btn.addEventListener('click', () => onCardClick(btn));
+        gridEl.appendChild(btn);
+      });
+    }
+
+    function onCardClick(card) {
+      // Ignorieren, wenn gesperrt oder Karte bereits offen/gelöst ist
+      if (isLocked || card.classList.contains('revealed') || card.classList.contains('matched')) {
+        return;
+      }
+
+      // Karte aufdecken
+      revealCard(card);
+      flippedCards.push(card);
+
+      if (flippedCards.length === 2) {
+        moves++;
+        movesEl.textContent = moves;
+        checkPair();
+      }
+    }
+
+    function revealCard(card) {
+      card.classList.remove('hidden');
+      card.classList.add('revealed', 'type-' + card.dataset.type);
+      card.textContent = card.dataset.text;
+    }
+
+    function hideCard(card) {
+      card.classList.remove('revealed', 'type-' + card.dataset.type);
+      card.classList.add('hidden');
+      card.textContent = '?';
+    }
+
+    function checkPair() {
+      const [c1, c2] = flippedCards;
+      const isMatch = c1.dataset.id === c2.dataset.id;
+
+      if (isMatch) {
+        // Dauerhaft offen halten
+        c1.classList.add('matched');
+        c2.classList.add('matched');
+        matchedCount++;
+        flippedCards = [];
+
+        if (matchedCount === PAIRS.length) {
+          setTimeout(() => {
+            winMsgEl.textContent = `Alle 8 Begriffspaare in ${moves} Zügen gelöst!`;
+            modalEl.classList.add('show');
+          }, 400);
+        }
+      } else {
+        isLocked = true;
+        setTimeout(() => {
+          hideCard(c1);
+          hideCard(c2);
+          flippedCards = [];
+          isLocked = false;
+        }, 1100);
+      }
+    }
+
+    restartBtn.addEventListener('click', initGame);
+    modalRestartBtn.addEventListener('click', initGame);
+
+    // Initialer Start
+    initGame();
+  </script>
+</body>
+</html>
