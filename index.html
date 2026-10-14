@@ -12,6 +12,7 @@
       --card-def-bg: #064e3b;
       --accent: #38bdf8;
       --matched-border: #22c55e;
+      --mismatch-border: #ef4444;
       --text: #f8fafc;
     }
 
@@ -103,29 +104,37 @@
     }
 
     /* Status 2: Aufgedeckt (Begriff) */
-    .card.revealed.type-term {
+    .card.revealed.type-term,
+    .preview-card.type-term {
       background-color: var(--card-term-bg);
       border-color: var(--accent);
       font-weight: 700;
-      font-size: 0.85rem;
     }
 
     /* Status 2: Aufgedeckt (Definition) */
-    .card.revealed.type-def {
+    .card.revealed.type-def,
+    .preview-card.type-def {
       background-color: var(--card-def-bg);
       border-color: var(--accent);
-      font-size: 0.72rem;
     }
 
-    /* Status 3: Gefundenes Paar (Bleibt sichtbar offen) */
+    .card.revealed.type-term { font-size: 0.85rem; }
+    .card.revealed.type-def { font-size: 0.72rem; }
+
+    /* Status 3: Falsches Paar (rot hervorgehoben) */
+    .card.mismatch {
+      border-color: var(--mismatch-border) !important;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+    }
+
+    /* Status 4: Gefundenes Paar (bleibt klickbar für Vergrößerung) */
     .card.matched {
       border-color: var(--matched-border) !important;
       box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-      cursor: default;
-      pointer-events: none;
+      cursor: pointer;
     }
 
-    /* Popup bei Gewinn */
+    /* Modals (Gewinn & Kartenvergrößerung) */
     .modal {
       position: fixed;
       inset: 0;
@@ -133,7 +142,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 24px;
       z-index: 100;
     }
 
@@ -153,6 +162,42 @@
 
     .modal h2 { margin-bottom: 12px; color: var(--accent); }
     .modal p { margin-bottom: 20px; color: #cbd5e1; }
+
+    /* Vergrößerte Karte */
+    .preview-card {
+      border-radius: 16px;
+      border: 3px solid var(--matched-border);
+      padding: 24px 20px;
+      max-width: 340px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+    }
+
+    .preview-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.15);
+      margin-bottom: 14px;
+      color: #cbd5e1;
+    }
+
+    .preview-text {
+      font-size: 1.25rem;
+      line-height: 1.45;
+      color: #fff;
+      word-break: break-word;
+    }
+
+    .preview-hint {
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
   </style>
 </head>
 <body>
@@ -164,11 +209,21 @@
 
   <main class="grid" id="grid"></main>
 
+  <!-- Gewinn-Dialog -->
   <div class="modal" id="winModal">
     <div class="modal-box">
       <h2>Geschafft! 🎉</h2>
       <p id="winMessage"></p>
       <button class="btn" id="modalRestartBtn">Nochmal spielen</button>
+    </div>
+  </div>
+
+  <!-- Vergrößerungs-Overlay für gelöste Karten -->
+  <div class="modal" id="cardModal">
+    <div class="preview-card" id="previewCard">
+      <div class="preview-badge" id="previewBadge">Begriff</div>
+      <div class="preview-text" id="previewText"></div>
+      <div class="preview-hint">Tippen zum Schließen</div>
     </div>
   </div>
 
@@ -186,15 +241,21 @@
 
     const gridEl = document.getElementById('grid');
     const movesEl = document.getElementById('moves');
-    const modalEl = document.getElementById('winModal');
+    const winModalEl = document.getElementById('winModal');
     const winMsgEl = document.getElementById('winMessage');
     const restartBtn = document.getElementById('restartBtn');
     const modalRestartBtn = document.getElementById('modalRestartBtn');
 
+    // Elemente für die vergrößerte Ansicht
+    const cardModalEl = document.getElementById('cardModal');
+    const previewCardEl = document.getElementById('previewCard');
+    const previewBadgeEl = document.getElementById('previewBadge');
+    const previewTextEl = document.getElementById('previewText');
+
     let flippedCards = [];
     let moves = 0;
     let matchedCount = 0;
-    let isLocked = false;
+    let hasMismatch = false;
 
     function shuffle(array) {
       for (let i = array.length - 1; i > 0; i--) {
@@ -205,15 +266,15 @@
     }
 
     function initGame() {
-      modalEl.classList.remove('show');
+      winModalEl.classList.remove('show');
+      cardModalEl.classList.remove('show');
       gridEl.innerHTML = '';
       flippedCards = [];
       moves = 0;
       matchedCount = 0;
-      isLocked = false;
+      hasMismatch = false;
       movesEl.textContent = moves;
 
-      // Deck vorbereiten
       const deck = [];
       PAIRS.forEach(pair => {
         deck.push({ id: pair.id, text: pair.term, type: 'term' });
@@ -231,18 +292,64 @@
         btn.dataset.text = item.text;
         btn.dataset.type = item.type;
 
-        btn.addEventListener('click', () => onCardClick(btn));
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onCardClick(btn);
+        });
         gridEl.appendChild(btn);
       });
     }
 
+    // Bei Klick ins Leere: Falsche Karten zudecken
+    document.addEventListener('click', () => {
+      if (hasMismatch) {
+        clearMismatch();
+      }
+    });
+
+    // Klick auf das Vergrößerungs-Popup schließt es wieder
+    cardModalEl.addEventListener('click', () => {
+      cardModalEl.classList.remove('show');
+    });
+
+    function showCardDetail(card) {
+      const isTerm = card.dataset.type === 'term';
+      previewBadgeEl.textContent = isTerm ? 'Begriff' : 'Erklärung / Definition';
+      previewTextEl.textContent = card.dataset.text;
+
+      // Farbschema anpassen (Blau oder Grün)
+      previewCardEl.className = 'preview-card type-' + card.dataset.type;
+      cardModalEl.classList.add('show');
+    }
+
+    function clearMismatch() {
+      flippedCards.forEach(card => hideCard(card));
+      flippedCards = [];
+      hasMismatch = false;
+    }
+
     function onCardClick(card) {
-      // Ignorieren, wenn gesperrt oder Karte bereits offen/gelöst ist
-      if (isLocked || card.classList.contains('revealed') || card.classList.contains('matched')) {
+      // 1. Wenn bereits ein richtiges Paar gelöst ist: Karte groß anzeigen
+      if (card.classList.contains('matched')) {
+        // Falls noch ein falsches Paar offen liegt, zuerst dieses zudecken
+        if (hasMismatch) clearMismatch();
+        showCardDetail(card);
         return;
       }
 
-      // Karte aufdecken
+      // 2. Offenes falsches Paar wegräumen
+      if (hasMismatch) {
+        const wasInMismatch = flippedCards.includes(card);
+        clearMismatch();
+        if (wasInMismatch) return;
+      }
+
+      // 3. Wenn die Karte bereits im aktuellen Zug aufgedeckt ist, nichts tun
+      if (card.classList.contains('revealed')) {
+        return;
+      }
+
+      // 4. Karte aufdecken
       revealCard(card);
       flippedCards.push(card);
 
@@ -260,7 +367,7 @@
     }
 
     function hideCard(card) {
-      card.classList.remove('revealed', 'type-' + card.dataset.type);
+      card.classList.remove('revealed', 'mismatch', 'type-' + card.dataset.type);
       card.classList.add('hidden');
       card.textContent = '?';
     }
@@ -270,7 +377,6 @@
       const isMatch = c1.dataset.id === c2.dataset.id;
 
       if (isMatch) {
-        // Dauerhaft offen halten
         c1.classList.add('matched');
         c2.classList.add('matched');
         matchedCount++;
@@ -279,24 +385,19 @@
         if (matchedCount === PAIRS.length) {
           setTimeout(() => {
             winMsgEl.textContent = `Alle 8 Begriffspaare in ${moves} Zügen gelöst!`;
-            modalEl.classList.add('show');
+            winModalEl.classList.add('show');
           }, 400);
         }
       } else {
-        isLocked = true;
-        setTimeout(() => {
-          hideCard(c1);
-          hideCard(c2);
-          flippedCards = [];
-          isLocked = false;
-        }, 1100);
+        c1.classList.add('mismatch');
+        c2.classList.add('mismatch');
+        hasMismatch = true;
       }
     }
 
     restartBtn.addEventListener('click', initGame);
     modalRestartBtn.addEventListener('click', initGame);
 
-    // Initialer Start
     initGame();
   </script>
 </body>
